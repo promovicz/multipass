@@ -222,6 +222,13 @@ int multipass_card_configure(FreefareTag tag) {
     return -1;
   }
 
+  /* Change master key settings */
+  res = mifare_desfire_change_key_settings(tag, settings);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to change master key settings\n");
+    return -1;
+  }
+
   /* Done */
   return 0;
 }
