@@ -237,6 +237,8 @@ int multipass_card_configure(FreefareTag tag) {
 int multipass_card_verify_configured(FreefareTag tag) {
   int res;
 
+  uint16_t settings = 0x09;
+
   /* Select master */
   res = mifare_desfire_select_application(tag, NULL);
   if(res<0) {
@@ -248,6 +250,22 @@ int multipass_card_verify_configured(FreefareTag tag) {
   res = mifare_desfire_authenticate(tag, 0, key_default_des);
   if(res<0) {
     fprintf(stderr, "Error: failed to authenticate using default key\n");
+    return -1;
+  }
+
+  /* Verify master settings */
+  uint8_t vsettings, vnumkeys;
+  res = mifare_desfire_get_key_settings(tag, &vsettings, &vnumkeys);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to read master settings\n");
+    return -1;
+  }
+  if(vsettings != settings) {
+    fprintf(stderr, "Error: wrong master settings\n");
+    return -1;
+  }
+  if(vnumkeys != 1) {
+    fprintf(stderr, "Error: wrong number of keys\n");
     return -1;
   }
 
