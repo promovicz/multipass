@@ -643,6 +643,7 @@ int main(int argc, char **argv) {
 	  break;
 	}
 	fprintf(stderr, "okay.\n");
+#if 0
 	/* Create NDEF application */
 	fprintf(stderr, "  Creating NDEF application...");
 	res = multipass_create_ndef(tag, key_default_des, key_ndef_master, key_ndef_shared, NDEF_MAXDATA);
@@ -659,6 +660,7 @@ int main(int argc, char **argv) {
 	  break;
 	}
 	fprintf(stderr, "okay.\n");
+#endif
 	/* Done with one card, so we are finished*/
 	break;
       }
