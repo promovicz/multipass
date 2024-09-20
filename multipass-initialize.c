@@ -655,14 +655,6 @@ int main(int argc, char **argv) {
   key_cbid_shared = mifare_desfire_aes_key_new_with_version(shared_cbid,1);
   key_ndef_shared = mifare_desfire_aes_key_new_with_version(shared_ndef,1);
 
-  /* Generate card-specific keys */
-  const uint8_t *private_card = gcry_random_bytes_secure(16,GCRY_VERY_STRONG_RANDOM);
-  const uint8_t *private_cbid = gcry_random_bytes_secure(16,GCRY_VERY_STRONG_RANDOM);
-  const uint8_t *private_ndef = gcry_random_bytes_secure(16,GCRY_VERY_STRONG_RANDOM);
-  key_card_master = mifare_desfire_aes_key_new_with_version(private_card,1);
-  key_cbid_master = mifare_desfire_aes_key_new_with_version(private_cbid,1);
-  key_ndef_master = mifare_desfire_aes_key_new_with_version(private_ndef,1);
-
   /* List NFC devices/interfaces */
   ndevcount = nfc_list_devices(nctx, ndevs, MAX_DEVICES);
   if(ndevcount <= 0) {
@@ -714,6 +706,49 @@ int main(int argc, char **argv) {
 	  break;
 	}
 	fprintf(stderr, "okay.\n");
+
+        /* Generate card-specific keys */
+        fprintf(stderr, "  Generating keys...");
+        uint8_t *private_card = gcry_random_bytes_secure(16,GCRY_VERY_STRONG_RANDOM);
+        uint8_t *private_cbid = gcry_random_bytes_secure(16,GCRY_VERY_STRONG_RANDOM);
+        uint8_t *private_ndef = gcry_random_bytes_secure(16,GCRY_VERY_STRONG_RANDOM);
+        key_card_master = mifare_desfire_aes_key_new_with_version(private_card,1);
+        key_cbid_master = mifare_desfire_aes_key_new_with_version(private_cbid,1);
+        key_ndef_master = mifare_desfire_aes_key_new_with_version(private_ndef,1);
+        fprintf(stderr, "okay.\n");
+        /* Write keys, before changing the card */
+        char fn[128];
+        fprintf(stderr, "  Saving keys...");
+        snprintf(fn, sizeof(fn),"keys/%s",uid);
+        res = mkdir(fn,0700);
+        if(res<0) {
+	  fprintf(stderr, "Error: failed to create directory %s\n", fn);
+          perror("mkdir");
+	  break;
+        }
+        snprintf(fn, sizeof(fn),"keys/%s/card-cmk-1.bin",uid);
+        res = util_write_file(fn,private_card,16);
+        if(res<0) {
+	  fprintf(stderr, "Error: failed to write file %s\n", fn);
+          break;
+        }
+        snprintf(fn, sizeof(fn),"keys/%s/cbid-amk-1.bin",uid);
+        res = util_write_file(fn,private_cbid,16);
+        if(res<0) {
+	  fprintf(stderr, "Error: failed to write file %s\n", fn);
+          break;
+        }
+        snprintf(fn, sizeof(fn),"keys/%s/ndef-amk-1.bin",uid);
+        res = util_write_file(fn,private_ndef,16);
+        if(res<0) {
+	  fprintf(stderr, "Error: failed to write file %s\n", fn);
+          break;
+        }
+        fprintf(stderr, "okay.\n");
+        /* Free key buffers */
+        gcry_free(private_card);
+        gcry_free(private_cbid);
+        gcry_free(private_ndef);
 	/* Configure the card */
 	fprintf(stderr, "  Configuring card...");
 	res = multipass_configure_card(tag, key_card_master);
