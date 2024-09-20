@@ -8,63 +8,14 @@
 
 #include <gcrypt.h>
 
-#undef WITH_DEBUG
 #include <freefare.h>
 
 #define MAX_DEVICES 32
 
 #define NEED_LIBGCRYPT_VERSION "1.10.1"
 
-/*****************************************************************************
- * Constants for c-base identity app                                         *
- *****************************************************************************/
-
-/* Mifare AID */
-#define CBID_APP  0x00637270
-
-#define CBID_NUMKEYS 2
-
-/* Key identifiers */
-#define CBID_KID_MASTER 0
-#define CBID_KID_SHARED 1
-
-/* File numbers */
-#define CBID_FNO_ORGANIZATION 0x00
-#define CBID_FNO_DESCRIPTION 0x01
-#define CBID_FNO_MEMBER_UID 0x02
-#define CBID_FNO_MEMBER_NAME 0x03
-#define CBID_FNO_CARD_UID 0x10
-
-/* Configuration constants */
-#define CBID_ORGANIZATION "c-base e.V."
-#define CBID_DESCRIPTION  "member id"
-
-/*****************************************************************************
- * Constants for NDEF mapping version 2                                      *
- *****************************************************************************/
-
-/* Mifare AID */
-#define NDEF_APP 0x00000001
-/* ISO7616 AID */
-#define NDEF_AID { 0xd2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01 }
-
-#define NDEF_NUMKEYS 2
-
-/* Key identifiers */
-#define NDEF_KID_MASTER 0
-#define NDEF_KID_SHARED 1
-
-/* File numbers */
-#define NDEF_FNO_CC   0x01
-#define NDEF_FNO_DATA 0x02
-
-/* ISO file identifiers */
-#define NDEF_FID_APP  0xE110
-#define NDEF_FID_CC   0xE103
-#define NDEF_FID_DATA 0xE104
-
-/* Configuration constants */
-#define NDEF_MAXDATA 256
+#include "multipass.h"
+#include "multipass-util.c"
 
 /*****************************************************************************
  * Globals                                                                   *
@@ -78,12 +29,14 @@ MifareDESFireAID aid_ndef;
 MifareDESFireKey key_default_des;
 MifareDESFireKey key_default_aes;
 
-/* Actual keys */
+/* Shared keys */
+MifareDESFireKey key_cbid_shared;
+MifareDESFireKey key_ndef_shared;
+
+/* Card-specific keys */
 MifareDESFireKey key_card_master;
 MifareDESFireKey key_cbid_master;
-MifareDESFireKey key_cbid_shared;
 MifareDESFireKey key_ndef_master;
-MifareDESFireKey key_ndef_shared;
 
 /*****************************************************************************
  * Shared functions                                                          *
@@ -302,8 +255,24 @@ int multipass_card_finalize(FreefareTag tag, MifareDESFireKey cmk) {
 }
 
 /* Verify card/master application */
-int multipass_card_verify_finalized(FreefareTag tag) {
+int multipass_card_verify_finalized(FreefareTag tag, MifareDESFireKey cmk) {
   int res;
+
+  /* Select master */
+  res = mifare_desfire_select_application(tag, NULL);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to select master\n");
+    return -1;
+  }
+
+  /* Authenticate using default key */
+  res = mifare_desfire_authenticate_aes(tag, 0, cmk);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to authenticate to master\n");
+    return -1;
+  }
+
+  /* Done */
   return 0;
 }
 
@@ -609,79 +578,6 @@ int multipass_verify_ndef(FreefareTag tag,
     fprintf(stderr, "Error: wrong ASK version\n");
     return -1;
   }
-
-  /* Done */
-  return 0;
-}
-
-int util_read_file(const char *path, uint8_t *buf, size_t len) {
-  int res;
-  struct stat st;
-  FILE *fs;
-  size_t done;
-
-  /* Check file size */
-  res = stat(path,&st);
-  if(res<0) {
-    fprintf(stderr,"Error: failed to read file %s\n", path);
-    perror("stat");
-    return -1;
-  }
-  if(st.st_size!=(off_t)len) {
-    fprintf(stderr,"Error: file %s should be %zu bytes in size\n",path,len);
-    return -1;
-  }
-
-  /* Open */
-  fs = fopen(path, "r");
-  if(!fs) {
-    fprintf(stderr,"Error: could not open file %s\n",path);
-    return -1;
-  }
-
-  /* Read */
-  done = fread(buf,1,len,fs);
-  if(done!=len) {
-    fprintf(stderr,"Error: could not read file %s\n",path);
-    return -1;
-  }
-
-  /* Close */
-  fclose(fs);
-
-  /* Done */
-  return 0;
-}
-
-int util_write_file(const char *path, const uint8_t *buf, size_t len) {
-  int res;
-  struct stat st;
-  FILE *fs;
-  size_t done;
-
-  /* Check file size */
-  res = stat(path,&st);
-  if(res==0) {
-    fprintf(stderr,"Error: file %s exists already\n", path);
-    return -1;
-  }
-
-  /* Open */
-  fs = fopen(path, "w");
-  if(!fs) {
-    fprintf(stderr,"Error: could not open file %s\n",path);
-    return -1;
-  }
-
-  /* Read */
-  done = fwrite((void*)buf,1,len,fs);
-  if(done!=len) {
-    fprintf(stderr,"Error: could not write file %s\n",path);
-    return -1;
-  }
-
-  /* Close */
-  fclose(fs);
 
   /* Done */
   return 0;
