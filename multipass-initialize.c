@@ -4,11 +4,14 @@
 #include <string.h>
 #include <unistd.h>
 
-#undef WITH_DEBUG
+#include <gcrypt.h>
 
+#undef WITH_DEBUG
 #include <freefare.h>
 
 #define MAX_DEVICES 32
+
+#define NEED_LIBGCRYPT_VERSION "1.10.1"
 
 /*****************************************************************************
  * Constants for c-base identity app                                         *
@@ -531,6 +534,19 @@ int main(int argc, char **argv) {
   nfc_connstring ndevs[MAX_DEVICES];
   FreefareTag *tags;
   int res, i, j;
+
+  /* Initialize gcrypt */
+  if (!gcry_check_version (NEED_LIBGCRYPT_VERSION)) {
+    fprintf (stderr, "libgcrypt is too old (need %s, have %s)\n",
+             NEED_LIBGCRYPT_VERSION, gcry_check_version (NULL));
+    exit (1);
+  }
+  gcry_control (GCRYCTL_INIT_SECMEM, 16384, 0);
+  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+  if (!gcry_control (GCRYCTL_INITIALIZATION_FINISHED_P)) {
+    fputs ("libgcrypt has not been initialized\n", stderr);
+    abort ();
+  }
 
   /* Initialize libnfc */
   nfc_init(&nctx);
