@@ -567,13 +567,19 @@ int main(int argc, char **argv) {
   key_default_des = mifare_desfire_des_key_new_with_version(defkey64);
   key_default_aes = mifare_desfire_aes_key_new_with_version(defkey128, 0);
 
-  /* Create other keys */
-  const uint8_t cbidask[16] = CBID_SHARED;
-  key_card_master = mifare_desfire_aes_key_new_with_version(cbidask,1);
-  key_cbid_master = mifare_desfire_aes_key_new_with_version(cbidask,1);
-  key_cbid_shared = mifare_desfire_aes_key_new_with_version(cbidask,1);
-  key_ndef_master = mifare_desfire_aes_key_new_with_version(cbidask,1);
-  key_ndef_shared = mifare_desfire_aes_key_new_with_version(cbidask,1);
+  /* Create shared keys */
+  const uint8_t shared_cbid[16] = CBID_SHARED;
+  const uint8_t shared_ndef[16] = NDEF_SHARED;
+  key_cbid_shared = mifare_desfire_aes_key_new_with_version(shared_cbid,1);
+  key_ndef_shared = mifare_desfire_aes_key_new_with_version(shared_ndef,1);
+
+  /* Generate card-specific keys */
+  const uint8_t *private_card = gcry_random_bytes_secure(16,GCRY_VERY_STRONG_RANDOM);
+  const uint8_t *private_cbid = gcry_random_bytes_secure(16,GCRY_VERY_STRONG_RANDOM);
+  const uint8_t *private_ndef = gcry_random_bytes_secure(16,GCRY_VERY_STRONG_RANDOM);
+  key_card_master = mifare_desfire_aes_key_new_with_version(private_card,1);
+  key_cbid_master = mifare_desfire_aes_key_new_with_version(private_cbid,1);
+  key_ndef_master = mifare_desfire_aes_key_new_with_version(private_ndef,1);
 
   /* List NFC devices/interfaces */
   ndevcount = nfc_list_devices(nctx, ndevs, MAX_DEVICES);
@@ -675,8 +681,8 @@ int main(int argc, char **argv) {
 	  fprintf(stderr, "Error: failed to verify NDEF application\n");
 	  break;
 	}
-	fprintf(stderr, "okay.\n");
 #endif
+	fprintf(stderr, "okay.\n");
 	/* Done with one card, so we are finished*/
 	break;
       }
