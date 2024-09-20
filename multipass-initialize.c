@@ -38,7 +38,6 @@
 /* Configuration constants */
 #define CBID_ORGANIZATION "c-base e.V."
 #define CBID_DESCRIPTION  "member id"
-#define CBID_SHARED {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
 
 /*****************************************************************************
  * Constants for NDEF mapping version 2                                      *
@@ -65,7 +64,6 @@
 #define NDEF_FID_DATA 0xE104
 
 /* Configuration constants */
-#define NDEF_SHARED {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
 #define NDEF_MAXDATA 256
 
 /*****************************************************************************
@@ -103,7 +101,7 @@ int multipass_authselect(FreefareTag tag, MifareDESFireAID aid, uint8_t kid, Mif
   }
 
   /* Authenticate using given key */
-  res = mifare_desfire_authenticate(tag, kid, key);
+  res = mifare_desfire_authenticate_aes(tag, kid, key);
   if(res<0) {
     fprintf(stderr, "Error: failed to authenticate\n");
     return -1;
@@ -167,20 +165,27 @@ int multipass_create_simple_string(FreefareTag tag, uint8_t fno, uint8_t fcm, ui
  *****************************************************************************/
 
 /* Verify that the card is blank */
-int multipass_verify_blank(FreefareTag tag) {
+int multipass_card_verify_blank(FreefareTag tag) {
   int res;
 
-  /* Authenticate with the default key */
-  res = multipass_authselect_master(tag, key_default_des);
+  /* Select master */
+  res = mifare_desfire_select_application(tag, NULL);
   if(res<0) {
-    fprintf(stderr, "Error: failed to authenticate\n");
+    fprintf(stderr, "Error: failed to select master\n");
+    return -1;
+  }
+
+  /* Authenticate using default key */
+  res = mifare_desfire_authenticate(tag, 0, key_default_des);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to authenticate using default key\n");
     return -1;
   }
 
   /* Check applications */
   MifareDESFireAID *aids;
   size_t aidcount;
-  res = mifare_desfire_get_application_ids(tag, &aids, &aidcount);
+   res = mifare_desfire_get_application_ids(tag, &aids, &aidcount);
   if(res<0) {
     fprintf(stderr, "Error: could not list applications\n");
     return -1;
@@ -195,7 +200,7 @@ int multipass_verify_blank(FreefareTag tag) {
 }
 
 /* Configure card/master application */
-int multipass_configure_card(FreefareTag tag, MifareDESFireKey cmk) {
+int multipass_card_configure(FreefareTag tag) {
   int res;
 
   uint8_t settings = MDMK_SETTINGS(1/*CMK settings not frozen*/,
@@ -203,36 +208,82 @@ int multipass_configure_card(FreefareTag tag, MifareDESFireKey cmk) {
 				   0/*CMK required for listing*/,
 				   1/*CMK not frozen*/);
 
-  /* Authenticate with the default key */
-  res = multipass_authselect_master(tag, key_default_des);
+  /* Select master */
+  res = mifare_desfire_select_application(tag, NULL);
   if(res<0) {
-    fprintf(stderr, "Error: could not authenticate\n");
+    fprintf(stderr, "Error: failed to select master\n");
     return -1;
   }
 
-  /* Change master settings */
+  /* Authenticate using default key */
+  res = mifare_desfire_authenticate(tag, 0, key_default_des);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to authenticate using default key\n");
+    return -1;
+  }
 
+  /* Done */
+  return 0;
+}
+
+/* Verify card/master application */
+int multipass_card_verify_configured(FreefareTag tag) {
+  int res;
+
+  /* Select master */
+  res = mifare_desfire_select_application(tag, NULL);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to select master\n");
+    return -1;
+  }
+
+  /* Authenticate using default key */
+  res = mifare_desfire_authenticate(tag, 0, key_default_des);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to authenticate using default key\n");
+    return -1;
+  }
+
+  return 0;
+}
+
+/* Finalize card/master application */
+int multipass_card_finalize(FreefareTag tag, MifareDESFireKey cmk) {
+  int res;
+
+  /* Select master */
+  res = mifare_desfire_select_application(tag, NULL);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to select master\n");
+    return -1;
+  }
+
+  /* Authenticate using default key */
+  res = mifare_desfire_authenticate(tag, 0, key_default_des);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to authenticate using default key\n");
+    return -1;
+  }
+
+  /* Set master key */
+  res = mifare_desfire_change_key(tag, 0, cmk, NULL);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to change CMK\n");
+    freefare_perror(tag, "change_ask");
+    return -1;
+  }
 
   return 0;
 }
 
 /* Verify card/master application */
-int multipass_verify_card(FreefareTag tag, MifareDESFireKey cmk) {
+int multipass_card_verify_finalized(FreefareTag tag) {
   int res;
-
-  /* Authenticate with the given key */
-  res = multipass_authselect_master(tag, cmk);
-  if(res<0) {
-    fprintf(stderr, "Error: could not authenticate\n");
-    return -1;
-  }
-
   return 0;
 }
 
 /* Create c-base identity application */
-int multipass_create_cbid(FreefareTag tag, MifareDESFireKey cmk,
-			  MifareDESFireKey amk, MifareDESFireKey ask,
+int multipass_create_cbid(FreefareTag tag, MifareDESFireKey amk, MifareDESFireKey ask,
 			  const char *member_uid, const char *card_uid) {
   int res;
 
@@ -250,8 +301,13 @@ int multipass_create_cbid(FreefareTag tag, MifareDESFireKey cmk,
 				 MDAR_KEY0/*read-write*/,
 				 MDAR_KEY0/*change*/);
 
-  /* Authenticate to master */
-  res = multipass_authselect_master(tag, cmk);
+  /* Select and authenticate to master */
+  res = mifare_desfire_select_application(tag, NULL);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to select master\n");
+    return -1;
+  }
+  res = mifare_desfire_authenticate(tag, 0, key_default_des);
   if(res<0) {
     fprintf(stderr, "Error: failed to authenticate to master\n");
     return -1;
@@ -264,10 +320,15 @@ int multipass_create_cbid(FreefareTag tag, MifareDESFireKey cmk,
     return -1;
   }
 
-  /* Authenticate using default AMK */
-  res = multipass_authselect(tag, aid_cbid, CBID_KID_MASTER, key_default_aes);
+  /* Select and authenticate using default AMK */
+  res = mifare_desfire_select_application(tag, aid_cbid);
   if(res<0) {
-    fprintf(stderr, "Error: failed to authenticate using default AMK\n");
+    fprintf(stderr, "Error: failed to select application\n");
+    return -1;
+  }
+  res = mifare_desfire_authenticate_aes(tag, 0, key_default_aes);
+  if(res<0) {
+    fprintf(stderr, "Error: failed to authenticate to application using default key\n");
     return -1;
   }
 
@@ -609,6 +670,7 @@ int main(int argc, char **argv) {
   nfc_connstring ndevs[MAX_DEVICES];
   FreefareTag *tags;
   int res, i, j;
+  char fn[1024];
 
   /* Initialize gcrypt */
   if (!gcry_check_version (NEED_LIBGCRYPT_VERSION)) {
@@ -649,9 +711,21 @@ int main(int argc, char **argv) {
   key_default_des = mifare_desfire_des_key_new_with_version(defkey64);
   key_default_aes = mifare_desfire_aes_key_new_with_version(defkey128, 0);
 
-  /* Create shared keys */
-  const uint8_t shared_cbid[16] = CBID_SHARED;
-  const uint8_t shared_ndef[16] = NDEF_SHARED;
+  /* Read shared keys */
+  uint8_t shared_cbid[16];
+  uint8_t shared_ndef[16];
+  snprintf(fn, sizeof(fn),"keys/common/cbid-ask-1.bin");
+  res = util_read_file(fn,shared_cbid,sizeof(shared_cbid));
+  if(res<0) {
+    fprintf(stderr, "Error: could not read CBID ASK\n");
+    exit(1);
+  }
+  snprintf(fn, sizeof(fn),"keys/common/ndef-ask-1.bin");
+  res = util_read_file(fn,shared_ndef,sizeof(shared_ndef));
+  if(res<0) {
+    fprintf(stderr, "Error: could not read NDEF ASK\n");
+    exit(1);
+  }
   key_cbid_shared = mifare_desfire_aes_key_new_with_version(shared_cbid,1);
   key_ndef_shared = mifare_desfire_aes_key_new_with_version(shared_ndef,1);
 
@@ -663,7 +737,7 @@ int main(int argc, char **argv) {
   }
 
   /* Iterate NFC devices */
-  for(i=0; i<ndevcount; i++) {
+  for(i=0; i<(int)ndevcount; i++) {
     /* Open one device */
     ndev = nfc_open(nctx, ndevs[i]);
     /* List tags seen by device */
@@ -700,7 +774,7 @@ int main(int argc, char **argv) {
 		version.software.version_minor);
 	/* Verify that we have a blank card, abort if not blank */
 	fprintf(stderr, "  Verifying that card is blank...");
-	res = multipass_verify_blank(tag);
+	res = multipass_card_verify_blank(tag);
 	if(res<0) {
 	  fprintf(stderr, "Error: card is not blank, formatting advised\n");
 	  break;
@@ -717,28 +791,27 @@ int main(int argc, char **argv) {
         key_ndef_master = mifare_desfire_aes_key_new_with_version(private_ndef,1);
         fprintf(stderr, "okay.\n");
         /* Write keys, before changing the card */
-        char fn[128];
         fprintf(stderr, "  Saving keys...");
-        snprintf(fn, sizeof(fn),"keys/%s",uid);
+        snprintf(fn, sizeof(fn),"keys/card-%s",uid);
         res = mkdir(fn,0700);
         if(res<0) {
 	  fprintf(stderr, "Error: failed to create directory %s\n", fn);
           perror("mkdir");
 	  break;
         }
-        snprintf(fn, sizeof(fn),"keys/%s/card-cmk-1.bin",uid);
+        snprintf(fn, sizeof(fn),"keys/card-%s/card-cmk-1.bin",uid);
         res = util_write_file(fn,private_card,16);
         if(res<0) {
 	  fprintf(stderr, "Error: failed to write file %s\n", fn);
           break;
         }
-        snprintf(fn, sizeof(fn),"keys/%s/cbid-amk-1.bin",uid);
+        snprintf(fn, sizeof(fn),"keys/card-%s/cbid-amk-1.bin",uid);
         res = util_write_file(fn,private_cbid,16);
         if(res<0) {
 	  fprintf(stderr, "Error: failed to write file %s\n", fn);
           break;
         }
-        snprintf(fn, sizeof(fn),"keys/%s/ndef-amk-1.bin",uid);
+        snprintf(fn, sizeof(fn),"keys/card-%s/ndef-amk-1.bin",uid);
         res = util_write_file(fn,private_ndef,16);
         if(res<0) {
 	  fprintf(stderr, "Error: failed to write file %s\n", fn);
@@ -751,7 +824,7 @@ int main(int argc, char **argv) {
         gcry_free(private_ndef);
 	/* Configure the card */
 	fprintf(stderr, "  Configuring card...");
-	res = multipass_configure_card(tag, key_card_master);
+	res = multipass_card_configure(tag);
 	if(res<0) {
 	  fprintf(stderr, "Error: failed to change card configuration\n");
 	  break;
@@ -759,7 +832,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr, "okay.\n");
 	/* Verify card configuration */
 	fprintf(stderr, "  Verifying card...");
-	res = multipass_verify_card(tag, key_default_des);
+	res = multipass_card_verify_configured(tag);
 	if(res<0) {
 	  fprintf(stderr, "Error: failed to verify card configuration\n");
 	  break;
@@ -767,7 +840,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr, "okay.\n");
 	/* Create CBID application */
 	fprintf(stderr, "  Creating CBID application...");
-	res = multipass_create_cbid(tag, key_default_des, key_cbid_master, key_cbid_shared,
+	res = multipass_create_cbid(tag, key_cbid_master, key_cbid_shared,
 				    "00000000", uid);
 	if(res<0) {
 	  fprintf(stderr, "Error: failed to create CBID application\n");
@@ -785,7 +858,7 @@ int main(int argc, char **argv) {
 #if 0
 	/* Create NDEF application */
 	fprintf(stderr, "  Creating NDEF application...");
-	res = multipass_create_ndef(tag, key_default_des, key_ndef_master, key_ndef_shared, NDEF_MAXDATA);
+	res = multipass_create_ndef(tag, key_card_master, key_ndef_master, key_ndef_shared, NDEF_MAXDATA);
 	if(res<0) {
 	  fprintf(stderr, "Error: failed to create NDEF application\n");
 	  break;
