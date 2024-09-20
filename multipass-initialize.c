@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include <gcrypt.h>
 
@@ -552,6 +553,13 @@ int main(int argc, char **argv) {
   nfc_init(&nctx);
   if(!nctx) {
     fprintf(stderr, "Error: could not initialize libnfc\n");
+    exit(1);
+  }
+
+  /* Lock all memory */
+  res = mlockall(MCL_FUTURE);
+  if(res<0) {
+    fprintf(stderr, "Error: could not lock memory\n");
     exit(1);
   }
 
