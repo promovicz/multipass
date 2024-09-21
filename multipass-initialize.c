@@ -753,6 +753,12 @@ int main(int argc, char **argv) {
 	  fprintf(stderr, "Error: failed to write file %s\n", fn);
           break;
         }
+        snprintf(fn, sizeof(fn),"keys/card-%s/cbid-member-uid.txt",uid);
+        res = util_write_file(fn,(uint8_t*)member_uid,strlen(member_uid));
+        if(res<0) {
+	  fprintf(stderr, "Error: failed to write member uid %s\n", fn);
+          break;
+        }
         fprintf(stderr, "okay.\n");
         /* Free key buffers */
         gcry_free(private_card);
