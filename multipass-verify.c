@@ -160,8 +160,6 @@ int main(int argc, char **argv) {
         break;
       }
 
-
-
       /* Done processing tags, free the list */
       freefare_free_tags(tags);
     }
