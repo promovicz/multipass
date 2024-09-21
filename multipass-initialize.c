@@ -128,7 +128,7 @@ int multipass_card_verify_blank(FreefareTag tag) {
     return -1;
   }
 
-  /* Authenticate using default key */
+  /* Authenticate with default key */
   res = mifare_desfire_authenticate(tag, 0, key_default_des);
   if(res<0) {
     fprintf(stderr, "Error: failed to authenticate using default key\n");
@@ -168,7 +168,7 @@ int multipass_card_configure(FreefareTag tag) {
     return -1;
   }
 
-  /* Authenticate using default key */
+  /* Authenticate with default key */
   res = mifare_desfire_authenticate(tag, 0, key_default_des);
   if(res<0) {
     fprintf(stderr, "Error: failed to authenticate using default key\n");
@@ -199,7 +199,7 @@ int multipass_card_verify_configured(FreefareTag tag) {
     return -1;
   }
 
-  /* Authenticate using default key */
+  /* Authenticate with default key */
   res = mifare_desfire_authenticate(tag, 0, key_default_des);
   if(res<0) {
     fprintf(stderr, "Error: failed to authenticate using default key\n");
@@ -236,7 +236,7 @@ int multipass_card_finalize(FreefareTag tag, MifareDESFireKey cmk) {
     return -1;
   }
 
-  /* Authenticate using default key */
+  /* Authenticate with default key */
   res = mifare_desfire_authenticate(tag, 0, key_default_des);
   if(res<0) {
     fprintf(stderr, "Error: failed to authenticate using default key\n");
@@ -247,7 +247,7 @@ int multipass_card_finalize(FreefareTag tag, MifareDESFireKey cmk) {
   res = mifare_desfire_change_key(tag, 0, cmk, NULL);
   if(res<0) {
     fprintf(stderr, "Error: failed to change CMK\n");
-    freefare_perror(tag, "change_ask");
+    freefare_perror(tag, "change_cmk");
     return -1;
   }
 
@@ -265,7 +265,7 @@ int multipass_card_verify_finalized(FreefareTag tag, MifareDESFireKey cmk) {
     return -1;
   }
 
-  /* Authenticate using default key */
+  /* Authenticate with master key */
   res = mifare_desfire_authenticate_aes(tag, 0, cmk);
   if(res<0) {
     fprintf(stderr, "Error: failed to authenticate to master\n");
@@ -792,7 +792,23 @@ int main(int argc, char **argv) {
 	  fprintf(stderr, "Error: failed to verify NDEF application\n");
 	  break;
 	}
+        fprintf(stderr, "okay.\n");
 #endif
+	/* Finalize the card */
+	fprintf(stderr, "  Finalizing card...");
+	res = multipass_card_finalize(tag, key_card_master);
+	if(res<0) {
+	  fprintf(stderr, "Error: failed to finalize card\n");
+	  break;
+	}
+	fprintf(stderr, "okay.\n");
+	/* Verify that the card is finalized */
+	fprintf(stderr, "  Verifying card finalized...");
+	res = multipass_card_verify_finalized(tag, key_card_master);
+	if(res<0) {
+	  fprintf(stderr, "Error: failed to finalize card\n");
+	  break;
+	}
 	fprintf(stderr, "okay.\n");
 	/* Done with one card, so we are finished*/
 	break;
