@@ -39,6 +39,8 @@ int main(int argc, char **argv) {
   FreefareTag *tags;
   int res, i, j;
   char fn[1024];
+  uint8_t kv;
+  char member_uid[64];
 
   /* Initialize libnfc */
   nfc_init(&nctx);
@@ -155,6 +157,82 @@ int main(int argc, char **argv) {
         key_cbid_master = mifare_desfire_aes_key_new_with_version(secret_cbid,1);
         key_ndef_master = mifare_desfire_aes_key_new_with_version(secret_ndef,1);
         fprintf(stderr, "done,\n");
+
+        /* Select master */
+        res = mifare_desfire_select_application(tag, NULL);
+        if(res<0) {
+          fprintf(stderr, "Error: failed to select master\n");
+          return -1;
+        }
+
+        /* Check key version and authenticate using appropriate key */
+        res = mifare_desfire_get_key_version(tag, 0, &kv);
+        if(res<0) {
+          fprintf(stderr, "Error: failed to get master key version\n");
+          exit(1);
+        }
+        if(kv == 0) {
+          fprintf(stderr, "Error: card has default keys\n");
+          exit(1);
+        } else {
+          /* Read master key */
+          fprintf(stderr,"Reading key for card %s version %d...", uid, kv);
+          uint8_t secret[16];
+          snprintf(fn, sizeof(fn),"keys/card-%s/card-cmk-%d.bin",uid,kv);
+          res = util_read_file(fn,secret,sizeof(secret));
+          if(res<0) {
+            fprintf(stderr, "Error: could not read CMK\n");
+            exit(1);
+          }
+          key_card_master = mifare_desfire_aes_key_new_with_version(secret,1);
+          fprintf(stderr, "done.\n");
+          /* Authenticate using master key */
+          fprintf(stderr, "Authenticating with master key...");
+          res = mifare_desfire_authenticate_aes(tag, 0, key_card_master);
+        }
+        if(res<0) {
+          fprintf(stderr, "Error: failed to authenticate to master\n");
+          return -1;
+        }
+        fprintf(stderr, "done.\n");
+
+        /* Select CBID */
+        res = mifare_desfire_select_application(tag, aid_cbid);
+        if(res<0) {
+          fprintf(stderr, "Error: failed to select CBID\n");
+          return -1;
+        }
+
+        /* Authenticate using master key */
+        fprintf(stderr, "Authenticating with CBID AMK...");
+        res = mifare_desfire_authenticate_aes(tag, CBID_KID_MASTER, key_cbid_master);
+        if(res<0) {
+          fprintf(stderr, "Error: failed to authenticate using CBID AMK\n");
+          return -1;
+        }
+        fprintf(stderr, "done.\n");
+
+#if 0
+        /* Authenticate using shared key */
+        fprintf(stderr, "Authenticating with CBID ASK...");
+        res = mifare_desfire_authenticate_aes(tag, CBID_KID_SHARED, key_cbid_shared);
+        if(res<0) {
+          fprintf(stderr, "Error: failed to authenticate using CBID ASK\n");
+          return -1;
+        }
+        fprintf(stderr, "done.\n");
+#endif
+
+        /* Read and show member UID */
+        fprintf(stderr, "Reading member UID...");
+        memset(member_uid, 0, sizeof(member_uid));
+        res = mifare_desfire_read_data(tag, CBID_FNO_MEMBER_UID, 0, 32, member_uid);
+        if(res<0) {
+          fprintf(stderr, "Error: failed to read member UID\n");
+          freefare_perror(tag, "read_data");
+          return -1;
+        }
+        fprintf(stderr, "done, uid: '%s'\n", member_uid);
 
         /* Done with one card, so we are finished*/
         break;

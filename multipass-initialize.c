@@ -96,6 +96,9 @@ int multipass_create_simple_file(FreefareTag tag, uint8_t fno, uint8_t fcm, uint
 int multipass_create_simple_string(FreefareTag tag, uint8_t fno, uint8_t fcm, uint16_t far, size_t maxlen, const char *str) {
   int res;
   size_t len;
+  char *buf = alloca(maxlen);
+  memset(buf, 0, maxlen);
+  snprintf(buf, maxlen, "%s", str);
 
   /* Check size */
   len = strlen(str);
@@ -104,7 +107,7 @@ int multipass_create_simple_string(FreefareTag tag, uint8_t fno, uint8_t fcm, ui
   }
 
   /* Create the file */
-  res = multipass_create_simple_file(tag, fno, fcm, far, maxlen, str, len);
+  res = multipass_create_simple_file(tag, fno, fcm, far, maxlen, buf, maxlen);
   if(res<0) {
     return -1;
   }
@@ -592,6 +595,18 @@ int main(int argc, char **argv) {
   FreefareTag *tags;
   int res, i, j;
   char fn[1024];
+  const char *member_uid;
+
+  /* Check arguments */
+  if(argc != 2) {
+    fprintf(stderr, "Usage: %s <member-uid>\n", argv[0]);
+    exit(1);
+  }
+  member_uid = argv[1];
+
+  /* Get the member UID, no checking */
+  member_uid = argv[1];
+  fprintf(stdout, "Member UID: '%s'\n", member_uid);
 
   /* Initialize gcrypt */
   if (!gcry_check_version (NEED_LIBGCRYPT_VERSION)) {
@@ -762,7 +777,7 @@ int main(int argc, char **argv) {
 	/* Create CBID application */
 	fprintf(stderr, "  Creating CBID application...");
 	res = multipass_create_cbid(tag, key_cbid_master, key_cbid_shared,
-				    "00000000", uid);
+				    member_uid, uid);
 	if(res<0) {
 	  fprintf(stderr, "Error: failed to create CBID application\n");
 	  break;
