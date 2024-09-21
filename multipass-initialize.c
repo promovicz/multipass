@@ -330,14 +330,14 @@ int multipass_create_cbid(FreefareTag tag, MifareDESFireKey amk, MifareDESFireKe
   }
 
   /* Create organization file */
-  res = multipass_create_simple_string(tag, CBID_FNO_ORGANIZATION, MDCM_PLAIN, access_public, 16, CBID_ORGANIZATION);
+  res = multipass_create_simple_string(tag, CBID_FNO_ORGANIZATION, MDCM_PLAIN, access_public, 32, CBID_ORGANIZATION);
   if(res<0) {
     fprintf(stderr, "Error: failed to create organization tag\n");
     return -1;
   }
 
   /* Create description file */
-  res = multipass_create_simple_string(tag, CBID_FNO_DESCRIPTION, MDCM_PLAIN, access_public, 16, CBID_DESCRIPTION);
+  res = multipass_create_simple_string(tag, CBID_FNO_DESCRIPTION, MDCM_PLAIN, access_public, 32, CBID_DESCRIPTION);
   if(res<0) {
     fprintf(stderr, "Error: failed to create description tag\n");
     return -1;
